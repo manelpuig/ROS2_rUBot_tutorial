@@ -17,7 +17,7 @@ And the ROS2 reference sites:
 - https://docs.ros.org/
 - https://docs.ros.org/en/humble/
 
-ROS1 is at his end of life (EOL) and we have switched to ROS2 Humble. Each ROS2 version is maintained during 5 years. ROS2 Humble will be maintained up to may 2027.
+ROS1 is at its end of life (EOL) and we have switched to ROS2 Humble. Each ROS2 version is maintained for five years. ROS2 Humble will be maintained up to May 2027.
 
 ![](./Images/01_ROS2_setup/01_ROS2_time.png)
 
@@ -25,11 +25,11 @@ The main architecture and differences are:
 ![](./Images/01_ROS2_setup/02_ROS1_ROS2.png)
 ![](./Images/01_ROS2_setup/03_ROS2_dif.png)
 
-ROS2 Humble now is a very good choice!.
+ROS2 Humble is now a very good choice.
 
 **The Origin of ROS**
 
-ROS originated in 2007 at Stanford University's in Stanford AI Laboratory (SAIL) as part of the Stanford Artificial Intelligence Robot (STAIR) project. Later, development transitioned to Willow Garage. 
+ROS originated in 2007 at Stanford University's Stanford AI Laboratory (SAIL) as part of the Stanford Artificial Intelligence Robot (STAIR) project. Later, development transitioned to Willow Garage.
 
 ROS 2 was developed to address limitations in ROS 1, particularly concerning real-time performance, multi-robot systems, and production-level deployments.
 
@@ -37,30 +37,52 @@ ROS 2 was developed to address limitations in ROS 1, particularly concerning rea
 
 ROS 2 provides numerous benefits for robotics development:
 
-- Hardware Abstraction: Enables to be used in different robot hardware (PC, Arduino board, mobile phone, etc.).
-- Code Reusability: Facilitates the use of existing ROS packages and libraries from 3rd parties.
+- Hardware Abstraction: Enables ROS 2 to be used on different robot hardware (PC, Arduino board, mobile phone, etc.).
+- Code Reusability: Facilitates the use of existing ROS packages and libraries from third parties.
 - Modularity: Enables the development of modular and maintainable code.
 - Community Support: Offers access to a large and active community.
 - Production Readiness: Designed for robust and reliable deployments.
-- Robustness in terms of communication.
+- Robustness in communication.
 - Development Tools: Includes tools for visualization, debugging, and data logging (e.g., Rviz, ros2 bag).
 
 **How it Works**
 
-ROS 2 operates through a network of nodes that communicate using messages. A big project can be structured in a group of different nodes, each node contains a functionality and shares information with other nodes.
+ROS 2 operates through a network of nodes that communicate using messages. A large project can be structured as a group of different nodes; each node contains a functionality and shares information with other nodes.
 
-Here's a basic overview: Picture from ROS Official documentation: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html
+Here's a basic overview of the three ROS 2 communication styles:
+
+### ROS 2 communication styles
+
+- **Messaging (Topics)**: unidirectional publish/subscribe communication for streaming data.
+  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html
+
+
 ![](./Images/01_ROS2_setup/04_Topic-MultiplePublisherandMultipleSubscriber.gif)
-  
+
+- **Services**: synchronous request/response communication for one-shot operations.
+  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html
+
+
+![](./Images/01_ROS2_setup/Service-SingleServiceClient.gif)
+
+- **Actions**: asynchronous goal/feedback/result communication for long-running tasks.
+  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
+
+
+![](./Images/01_ROS2_setup/Action-SingleActionClient.gif)
+
 - Nodes: Independent processes that perform specific tasks.
 - Topics: Named communication channels where nodes publish and subscribe to messages.
 - Messages: Data structures defined in .msg files, used to exchange information.
 - DDS (Data Distribution Service): The middleware layer that handles the communication between nodes.
-- Services and Actions: Mechanisms for request/response communication and long-running tasks with feedback.
+- Services: Synchronous request/response communication.
+- Actions: Asynchronous goal/feedback/result communication with cancellation support.
 
-## **Setup a usefull working ROS environment**
 
-To work properly in ROS environment, you can:
+
+## **Setup a useful working ROS environment**
+
+To work properly in a ROS environment, you can:
 - use the UB custom Docker-based ROS2 Humble environment
 - use the ROS environment developed by "The Construct" third party enterprise.
 
@@ -104,7 +126,7 @@ To work on the project (during lab sessions or for homework at home), each stude
     pip3 list | grep setuptools
     pip3 install setuptools==58.2.0
     ````
-- If the compilation process returns wardings on PREFIX_PATH:
+- If the compilation process returns warnings on PREFIX_PATH:
     ````shell
     unset COLCON_PREFIX_PATH
     unset AMENT_PREFIX_PATH
@@ -129,9 +151,9 @@ To work on the project (during lab sessions or for homework at home), each stude
 
 You are ready to work with your repository for this session!
 
-**Repository syncronisation**
+**Repository synchronisation**
 
-The objective is to update the changes you have made, when working in ROS2 environment, in your github repository.
+The objective is to update the changes you have made, when working in a ROS2 environment, in your GitHub repository.
 
 - Access to your environment local repository:
   ````shell
@@ -205,6 +227,20 @@ ros2 interface show turtlesim/msg/Pose
 ```
 you can also find the message structure in google: "geometry_msgs/Twist"
 
+You can see this information in a compact form:
+````bash
+ros2 topic list -t
+/parameter_events [rcl_interfaces/msg/ParameterEvent]
+/rosout [rcl_interfaces/msg/Log]
+/turtle1/cmd_vel [geometry_msgs/msg/Twist]
+/turtle1/color_sensor [turtlesim/msg/Color]
+/turtle1/pose [turtlesim/msg/Pose]
+````
+
+To see sand practice the 3 different communication styles:
+
+### **Messaging (Topics)**:
+
 In order **to write a message to a topic** we have different options:
 - we can **publish directly to the topic**: for exemple to publish a Twist type message with a rate of 1Hz to define a circle, type:
 
@@ -214,21 +250,121 @@ ros2 topic pub -r 1 /turtle1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 2.0, 
 
 ![](./Images/01_ROS2_setup/09_turtlesim_pub.png)
 
-- or we will start another node to control the turtlesim robot:
+
+- we can **listen a message from a topic**:
+```shell
+ros2 topic echo /turtle1/pose
+ros2 topic echo /turtle1/cmd_vel
+```
+- If you’re wondering where all these topics are in rqt_graph, we can use "rqt_graph" and "rqt_plot" to se the nodes-topics structure and the message values
+
+```shell
+rqt_graph
+rqt # to open the rqt interface and then select the "Plot" plugin
+```
+
+![](./Images/01_ROS2_setup/11_turtlesim_rqt.png)
+
+
+### **Services**:
+
+Running the ros2 service list command in a new terminal will return a list of all the services currently active in the system
+
+````bash
+ros2 service list -t
+/clear [std_srvs/srv/Empty]
+/kill [turtlesim/srv/Kill]
+/reset [std_srvs/srv/Empty]
+/spawn [turtlesim/srv/Spawn]
+...
+/turtle1/set_pen [turtlesim/srv/SetPen]
+/turtle1/teleport_absolute [turtlesim/srv/TeleportAbsolute]
+/turtle1/teleport_relative [turtlesim/srv/TeleportRelative]
+...
+````
+- Let’s introspect a service with a type that sends and receives data, like /spawn. From the results of ros2 service list -t, we know /spawn’s type is turtlesim/srv/Spawn.
+
+To see the request and response arguments of the /spawn service, run the command:
+````bash
+ros2 interface show turtlesim/srv/Spawn
+float32 x
+float32 y
+float32 theta
+string name # Optional.  A unique name will be created and returned if this is empty
+---
+string name
+````
+- Now let’s spawn a new turtle by calling /spawn and setting arguments.
+````bash
+ros2 service call /spawn turtlesim/srv/Spawn "{x: 2, y: 2, theta: 0.2, name: ''}"
+requester: making request: turtlesim.srv.Spawn_Request(x=2.0, y=2.0, theta=0.2, name='')
+
+response:
+turtlesim.srv.Spawn_Response(name='turtle2')
+````
+![](./Images/01_ROS2_setup/spawn1.png)
+
+### **Actions**:
+
+Start up the two turtlesim nodes, /turtlesim and /teleop_turtle.
+- In another terminal, start /teleop_turtle node to control the turtlesim robot:
 ```shell
 ros2 run turtlesim turtle_teleop_key
 ```
 ![](./Images/01_ROS2_setup/10_turtlesim_key.png)
 
 Use the arrow keys on your keyboard to control the turtle. It will move around the screen, using its attached “pen” to draw the path it followed so far.
+- To identify all the actions in the ROS graph, run the command:
+````bash
+ros2 action list -t
+/turtle1/rotate_absolute [turtlesim/action/RotateAbsolute]
+````
+> In brackets to the right of each action name (in this case only /turtle1/rotate_absolute) is the action type, turtlesim/action/RotateAbsolute. You will need this when you want to execute an action from the command line or from code.
+- You can further introspect the /turtle1/rotate_absolute action with the command:
+````bash
+ros2 action info /turtle1/rotate_absolute
+Action: /turtle1/rotate_absolute
+Action clients: 1
+    /teleop_turtle
+Action servers: 1
+    /turtlesim
+````
+- One more piece of information you will need before sending or executing an action goal yourself is the structure of the action type.
+````bash
+ros2 interface show turtlesim/action/RotateAbsolute
+# The desired heading in radians
+float32 theta
+---
+# The angular displacement in radians to the starting position
+float32 delta
+---
+# The remaining rotation in radians
+float32 remaining
+````
 
-In order **to listen a message from a topic**:
-```shell
-ros2 topic echo /turtle1/pose
-ros2 topic echo /turtle1/cmd_vel
-```
+- Now let’s send an action goal from the command line and see the feedback:
+````bash
+ros2 action send_goal /turtle1/rotate_absolute turtlesim/action/RotateAbsolute "{theta: -1.57}" --feedback
+Sending goal:
+   theta: -1.57
 
-We can use "rqt_graph" and "rqt_plot" to se the nodes-topics structure and the message values
+Goal accepted with ID: e6092c831f994afda92f0086f220da27
+
+Feedback:
+  remaining: -3.1268222332000732
+
+Feedback:
+  remaining: -3.1108222007751465
+
+…
+
+Result:
+  delta: 3.1200008392333984
+
+Goal finished with status: SUCCEEDED
+````
+
+- We can use "rqt_graph" and "rqt_plot" to se the nodes-topics structure and the message values
 
 ```shell
 rqt_graph
