@@ -47,29 +47,11 @@ ROS 2 provides numerous benefits for robotics development:
 
 **How it Works**
 
-ROS 2 operates through a network of nodes that communicate using messages. A large project can be structured as a group of different nodes; each node contains a functionality and shares information with other nodes.
+ROS 2 operates through a network of nodes that communicate using messages. 
 
-Here's a basic overview of the three ROS 2 communication styles:
+A large project can be structured as a group of different nodes
 
-### ROS 2 communication styles
-
-- **Messaging (Topics)**: unidirectional publish/subscribe communication for streaming data.
-  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html
-
-
-![](./Images/01_ROS2_setup/04_Topic-MultiplePublisherandMultipleSubscriber.gif)
-
-- **Services**: synchronous request/response communication for one-shot operations.
-  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html
-
-
-![](./Images/01_ROS2_setup/Service-SingleServiceClient.gif)
-
-- **Actions**: asynchronous goal/feedback/result communication for long-running tasks.
-  - official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
-
-
-![](./Images/01_ROS2_setup/Action-SingleActionClient.gif)
+Each node contains a functionality and shares information with other nodes.
 
 - Nodes: Independent processes that perform specific tasks.
 - Topics: Named communication channels where nodes publish and subscribe to messages.
@@ -78,6 +60,124 @@ Here's a basic overview of the three ROS 2 communication styles:
 - Services: Synchronous request/response communication.
 - Actions: Asynchronous goal/feedback/result communication with cancellation support.
 
+### ROS 2 communication styles
+
+ROS 2 offers different communication mechanisms because robots exchange different kinds of information.
+
+Here's a basic overview of the three ROS 2 communication styles:
+
+A simple rule is:
+
+- Use a topic for continuous data.
+- Use a service for a short operation.
+- Use an action for a task that needs time to complete.
+
+**Topics: continuous information**: 
+
+Topics are used for unidirectional publish/subscribe communication for streaming data.
+
+Publisher ───── message ─────> Subscriber
+
+![](./Images/01_ROS2_setup/04_Topic-MultiplePublisherandMultipleSubscriber.gif)
+official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html
+
+
+Topics are used when data is published continuously.
+
+Examples:
+
+- robot velocity commands;
+- robot position;
+- camera images;
+- laser scanner measurements;
+- joint positions.
+
+For example:
+- a mobile robot continuously receives velocity commands through the topic: `/cmd_vel`
+- and continuously publishes its estimated position through the topic: `/odom`
+
+A topic does not normally return a direct response to the publisher.
+
+
+**Services: short request and response**: 
+
+A service is used when one node asks another node to execute a short operation.
+
+Client ───── request ─────> Server
+
+Client <──── response ───── Server
+
+Is a synchronous request/response communication for one-shot operations.
+
+![](./Images/01_ROS2_setup/Service-SingleServiceClient.gif)
+official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html
+
+Examples:
+
+- reset the robot odometry;
+- enable or disable the motors;
+- open or close a gripper;
+- change a robot configuration;
+- spawn a new turtle.
+
+A service should normally finish quickly.
+
+For example:
+- the /spawn service receives the position and name of a new turtle 
+- and returns the final turtle name.
+- The service structure is:
+  ```text
+  Request:
+      x
+      y
+      theta
+      name
+
+  Response:
+      final name
+  ```
+
+Services are not the best option for tasks that require several seconds because the client does not receive continuous information about the task progress.
+
+**Actions: tasks with progress**
+
+An action is used for a task that needs time to complete.
+
+Represents an asynchronous goal/feedback/result communication for long-running tasks.
+
+An action has three main parts:
+
+- Goal
+- Feedback
+- Result
+
+![](./Images/01_ROS2_setup/Action-SingleActionClient.gif)
+Official reference: https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Actions/Understanding-ROS2-Actions.html
+
+
+- The client sends a goal to the action server.
+
+  Action client ───── goal ─────> Action server
+
+- While the server is executing the task, it can send feedback. 
+
+  Action client <── feedback ─── Action server
+
+- When the task finishes, it sends the result.
+
+  Action client <──── result ─── Action server
+
+Actions can normally also be cancelled.
+
+Examples:
+
+- rotate a robot to a target angle;
+- navigate to a target position;
+- move a robotic arm;
+- follow a joint trajectory;
+- pick up an object.
+
+In Turtlesim, the /turtle1/rotate_absolute action rotates the turtle to a desired orientation.
 
 
 ## **Setup a useful working ROS environment**
@@ -237,9 +337,9 @@ ros2 topic list -t
 /turtle1/pose [turtlesim/msg/Pose]
 ````
 
-To see sand practice the 3 different communication styles:
+To see and practice the 3 different communication styles:
 
-### **Messaging (Topics)**:
+### **Topics**: 
 
 In order **to write a message to a topic** we have different options:
 - we can **publish directly to the topic**: for exemple to publish a Twist type message with a rate of 1Hz to define a circle, type:
@@ -282,9 +382,9 @@ ros2 service list -t
 /turtle1/teleport_relative [turtlesim/srv/TeleportRelative]
 ...
 ````
-- Let’s introspect a service with a type that sends and receives data, like /spawn. From the results of ros2 service list -t, we know /spawn’s type is turtlesim/srv/Spawn.
+- Let’s introspect a service with a type that sends and receives data, like `/spawn`. From the results of ros2 service list -t, we know /spawn’s type is turtlesim/srv/Spawn.
 
-To see the request and response arguments of the /spawn service, run the command:
+To see the request and response arguments of the `/spawn` service, run the command:
 ````bash
 ros2 interface show turtlesim/srv/Spawn
 float32 x
@@ -306,8 +406,12 @@ turtlesim.srv.Spawn_Response(name='turtle2')
 
 ### **Actions**:
 
-Start up the two turtlesim nodes, /turtlesim and /teleop_turtle.
-- In another terminal, start /teleop_turtle node to control the turtlesim robot:
+To practice wit a speciffic action, let's start up the two turtlesim nodes:
+- Open a new terminal and start `/turtlesim` node:
+```shell
+ros2 run turtlesim turtlesim_node
+```
+- In another terminal, start `/teleop_turtle` node to control the turtlesim robot:
 ```shell
 ros2 run turtlesim turtle_teleop_key
 ```
