@@ -132,6 +132,14 @@ The node:
 - publishes `/turtle1/cmd_vel`
 - reaches a target position and orientation
 
+To execute the node:
+```bash
+ros2 launch ros2_move_turtle go_to_pose.launch.py \
+  target_x:=2.0 \
+  target_y:=8.0 \
+  target_theta_deg:=-90.0
+```
+
 In this exercise the controller will remain almost identical.
 
 The main difference is that the target pose is no longer defined inside the node.
