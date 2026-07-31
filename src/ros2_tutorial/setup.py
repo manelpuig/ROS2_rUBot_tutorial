@@ -20,7 +20,6 @@ setup(
     maintainer_email='manel.puig@ub.edu',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'publisher_exec = ros2_tutorial.publisher_hello:main',

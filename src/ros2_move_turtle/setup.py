@@ -31,7 +31,6 @@ setup(
     maintainer_email='manel.puig@ub.edu',
     description='ROS 2 Turtlesim examples using Topics and Services',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'go_to_pose = ros2_move_turtle.go_to_pose:main',

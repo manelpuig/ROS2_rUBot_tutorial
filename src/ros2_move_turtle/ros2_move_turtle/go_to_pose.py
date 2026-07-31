@@ -90,6 +90,9 @@ class GoToPose(Node):
             10,
         )
 
+        self.finished = False
+        self.success = False
+
         # Closed-loop controller at 20 Hz
         self.control_timer = self.create_timer(
             0.05,
@@ -158,7 +161,7 @@ class GoToPose(Node):
 
     def control_loop(self) -> None:
         """Execute the closed-loop GoToPose controller."""
-        if self.pose is None:
+        if self.finished or self.pose is None:
             return
 
         if self.state == self.ROTATE_TO_TARGET:
@@ -169,9 +172,6 @@ class GoToPose(Node):
 
         elif self.state == self.ROTATE_TO_FINAL_ORIENTATION:
             self.rotate_to_final_orientation()
-
-        elif self.state == self.FINISHED:
-            self.stop_turtle()
 
     def rotate_to_target(self) -> None:
         """Rotate until the turtle points towards the target position."""
@@ -257,16 +257,16 @@ class GoToPose(Node):
         )
 
         if abs(orientation_error) <= self.angle_tolerance:
-            self.stop_turtle()
-            self.state = self.FINISHED
-
             final_theta_deg = math.degrees(self.pose.theta)
 
-            self.get_logger().info(
-                'Target pose reached successfully. '
-                f'Final pose: x={self.pose.x:.2f}, '
-                f'y={self.pose.y:.2f}, '
-                f'theta={final_theta_deg:.1f} deg'
+            self.finish_motion(
+                success=True,
+                message=(
+                    'Target pose reached successfully. '
+                    f'Final pose: x={self.pose.x:.2f}, '
+                    f'y={self.pose.y:.2f}, '
+                    f'theta={final_theta_deg:.1f} deg'
+                ),
             )
             return
 
@@ -283,6 +283,23 @@ class GoToPose(Node):
             angular_velocity=angular_velocity,
         )
 
+    def finish_motion(self, success: bool, message: str) -> None:
+        """Stop the turtle and finish the node execution."""
+        if self.finished:
+            return
+
+        self.stop_turtle()
+        self.control_timer.cancel()
+
+        self.success = success
+        self.finished = True
+        self.state = self.FINISHED
+
+        if success:
+            self.get_logger().info(message)
+        else:
+            self.get_logger().error(message)
+
 
 def main(args=None) -> None:
     rclpy.init(args=args)
@@ -290,11 +307,23 @@ def main(args=None) -> None:
     node = GoToPose()
 
     try:
-        rclpy.spin(node)
+        while rclpy.ok() and not node.finished:
+            rclpy.spin_once(node, timeout_sec=0.1)
+
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info(
+            'Motion interrupted by the user.'
+        )
+        node.success = False
+
     finally:
+        # Always stop the turtle before closing the node
         node.stop_turtle()
+
+        # Process the stop command once before shutting down
+        if rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+
         node.destroy_node()
 
         if rclpy.ok():

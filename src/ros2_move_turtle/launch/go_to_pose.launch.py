@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -53,16 +53,15 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'target_x': LaunchConfiguration('target_x'),
             'target_y': LaunchConfiguration('target_y'),
-            'target_theta_deg': LaunchConfiguration(
-                'target_theta_deg'
-            ),
-            'position_tolerance': LaunchConfiguration(
-                'position_tolerance'
-            ),
-            'angle_tolerance_deg': LaunchConfiguration(
-                'angle_tolerance_deg'
-            ),
+            'target_theta_deg': LaunchConfiguration('target_theta_deg'),
+            'position_tolerance': LaunchConfiguration('position_tolerance'),
+            'angle_tolerance_deg': LaunchConfiguration('angle_tolerance_deg'),
         }],
+    )
+
+    delayed_go_to_pose = TimerAction(
+        period=3.0,
+        actions=[go_to_pose_node],
     )
 
     return LaunchDescription([
@@ -72,5 +71,5 @@ def generate_launch_description() -> LaunchDescription:
         position_tolerance_arg,
         angle_tolerance_deg_arg,
         turtlesim_node,
-        go_to_pose_node,
+        delayed_go_to_pose,
     ])
