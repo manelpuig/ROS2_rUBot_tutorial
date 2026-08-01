@@ -202,17 +202,3 @@ Now you can execute the launch file:
 ```shell
 ros2 launch ros2_tutorial hello_pub_sub.xml
 ```
-
-**Exercise:**
-
-Create a new package "ros2_move_turtle" to control the movement of the previous Turtlesim robot.
-
-![](./Images/02_ROS2_tutorial/02_move_turtle.png)
-
-The program functionality will be based on 2 nodes:
-- The "/turtlesim" node we have already practice in last section
-- A new "/move_turtle" node that:
-    - subscribes to the "/turtle1/pose" topic
-    - Publish to the "/turtle1/cmd_vel" topic a message Twist
-    - if the position in x or y direction of the robot is greater than 7m, the robot stops
-

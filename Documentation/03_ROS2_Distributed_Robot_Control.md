@@ -2,25 +2,29 @@
 
 ## Objective
 
-In the previous exercise, you implemented a simple `GoToPose` node.
+In this exercise, you will implement two ROS 2 architectures to move the Turtlesim robot to a target position and final orientation. 
 
-The node:
+![](./Images/02_ROS2_tutorial/02_move_turtle.png)
+> We usually name the node as the python file name
 
-* subscribed to the current turtle pose;
-* calculated the position and orientation errors;
-* generated linear and angular velocity commands;
-* stopped when the turtle reached the requested pose.
+The motion controller will:
 
-This exercise introduces a different software architecture.
+- subscribe to /turtle1/pose to obtain the current turtle pose;
+- calculate the distance and orientation errors;
+- publish linear and angular velocity commands to /turtle1/cmd_vel;
+- stop when the target position and final orientation are reached.
 
-The same motion controller will be executed by a persistent **robot server**, while another node will send the target pose using a ROS 2 Service.
+The same closed-loop controller will be used in two different software architectures:
 
-The objective is to understand how ROS 2 Services can be used to separate:
+- **Direct Node architecture**: In the first implementation, a single node receives the target pose through ROS 2 parameters and executes the complete motion controller.
+- **Client-Server architecture**: The same motion controller will be executed by a persistent **robot server**, while another node will send the target pose using a ROS 2 Service.
+
+The objective of the exercise is to compare both architectures and understand how ROS 2 Services can separate:
 
 * a high-level application running on a client computer;
-* a closed-loop robot controller running close to the robot.
+* a closed-loop robot controller running close to the robot, its sensors and its actuators.
 
-This architecture will later be used with the **rUBot mobile robot** and the **UR5e industrial robot**.
+This distributed architecture will later be reused with the rUBot mobile robot, where the controller may run on the Raspberry Pi, and with the UR5e industrial robot, where the motion server runs on the computer connected to the robot.
 
 ---
 
@@ -32,7 +36,7 @@ Imagine the following situation:
 * The robot has its own computer, such as a Raspberry Pi or an industrial control PC.
 * The robot must execute a closed-loop controller using sensors and actuators.
 
-A possible architecture would be:
+In the Direct node architecture would be:
 
 ```text
 Student PC
@@ -54,7 +58,7 @@ Possible problems include:
 
 If every velocity command must travel through the network, the robot may react slowly or unpredictably.
 
-A more robust architecture separates the high-level command from the local robot controller:
+Client-Server architecture is more robust and separates the high-level command from the local robot controller:
 
 ```text
 Student PC
@@ -240,64 +244,8 @@ src/
 
 ## `turtle_interfaces`
 
-The teaching staff provides the interface package:
-
-```text
-turtle_interfaces
-```
-
-This package contains the custom service definition:
-
-```text
-srv/RunPose.srv
-```
-
-The package uses:
-
-```text
-ament_cmake
-```
-
-Custom ROS 2 interfaces are generated during compilation using `rosidl_generate_interfaces()`.
-
+This package contains the custom service definition.
 Students do not need to modify this package.
-
----
-
-## `ros2_move_turtle`
-
-Students work inside the Python package:
-
-```text
-ros2_move_turtle
-```
-
-The final package contains:
-
-```text
-ros2_move_turtle/
-├── launch/
-│   ├── go_to_pose.launch.py
-│   ├── run_pose_server.launch.py
-│   └── run_pose_client.launch.py
-├── ros2_move_turtle/
-│   ├── go_to_pose.py
-│   ├── run_pose_server.py
-│   └── run_pose_client.py
-├── package.xml
-├── setup.cfg
-└── setup.py
-```
-
-This package uses:
-
-```text
-ament_python
-```
-
----
-
-# RunPose service definition
 
 The service is defined in:
 
@@ -329,6 +277,32 @@ The interface can be inspected with:
 
 ```bash
 ros2 interface show turtle_interfaces/srv/RunPose
+```
+---
+
+## `ros2_move_turtle`
+
+Students work inside the Python package:
+
+```text
+ros2_move_turtle
+```
+
+The final package contains:
+
+```text
+ros2_move_turtle/
+├── launch/
+│   ├── go_to_pose.launch.py
+│   ├── run_pose_server.launch.py
+│   └── run_pose_client.launch.py
+├── ros2_move_turtle/
+│   ├── go_to_pose.py
+│   ├── run_pose_server.py
+│   └── run_pose_client.py
+├── package.xml
+├── setup.cfg
+└── setup.py
 ```
 
 ---
