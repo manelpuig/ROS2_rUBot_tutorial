@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 
 import math
+import threading
+import time
 
 import rclpy
 from geometry_msgs.msg import Twist
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from turtle_interfaces.srv import RunPose
 from turtlesim.msg import Pose
 
 
-class GoToPose(Node):
-    """Move the turtlesim turtle to a target position and orientation."""
+class RunPoseServer(Node):
+    """Execute GoToPose motions requested through a ROS 2 service."""
 
     MOVE_TO_POSITION = 0
     ROTATE_TO_FINAL_ORIENTATION = 1
     IDLE = 2
 
     def __init__(self) -> None:
-        super().__init__('go_to_pose')
-
-        # Target pose parameters
-        self.declare_parameter('target_x', 8.0)
-        self.declare_parameter('target_y', 3.0)
-        self.declare_parameter('target_theta_deg', 90.0)
+        super().__init__('run_pose_server')
 
         # Controller parameters
         self.declare_parameter('linear_gain', 1.0)
@@ -30,37 +30,20 @@ class GoToPose(Node):
         self.declare_parameter('max_angular_speed', 2.0)
         self.declare_parameter('position_tolerance', 0.10)
         self.declare_parameter('angle_tolerance_deg', 2.0)
+        self.declare_parameter('motion_timeout', 30.0)
 
-        # Read target parameters
-        target_x = float(
-            self.get_parameter('target_x').value
-        )
-
-        target_y = float(
-            self.get_parameter('target_y').value
-        )
-
-        target_theta_deg = float(
-            self.get_parameter('target_theta_deg').value
-        )
-
-        # Read controller parameters
         self.linear_gain = float(
             self.get_parameter('linear_gain').value
         )
-
         self.angular_gain = float(
             self.get_parameter('angular_gain').value
         )
-
         self.max_linear_speed = float(
             self.get_parameter('max_linear_speed').value
         )
-
         self.max_angular_speed = float(
             self.get_parameter('max_angular_speed').value
         )
-
         self.position_tolerance = float(
             self.get_parameter('position_tolerance').value
         )
@@ -68,9 +51,10 @@ class GoToPose(Node):
         angle_tolerance_deg = float(
             self.get_parameter('angle_tolerance_deg').value
         )
+        self.angle_tolerance = math.radians(angle_tolerance_deg)
 
-        self.angle_tolerance = math.radians(
-            angle_tolerance_deg
+        self.motion_timeout = float(
+            self.get_parameter('motion_timeout').value
         )
 
         # Current turtle pose
@@ -88,38 +72,106 @@ class GoToPose(Node):
         self.motion_finished = False
         self.motion_success = False
         self.motion_message = ''
+        self.shutting_down = False
 
-        # Velocity publisher
+        # Used to notify the service callback when motion finishes
+        self.motion_done_event = threading.Event()
+
+        # Avoid two simultaneous motion requests
+        self.motion_lock = threading.Lock()
+
+        # Allow service, timer and subscriber callbacks to run concurrently
+        self.callback_group = ReentrantCallbackGroup()
+
         self.cmd_vel_publisher = self.create_publisher(
             Twist,
             '/turtle1/cmd_vel',
             10,
         )
 
-        # Pose subscriber
         self.pose_subscriber = self.create_subscription(
             Pose,
             '/turtle1/pose',
             self.pose_callback,
             10,
+            callback_group=self.callback_group,
         )
 
-        # Closed-loop controller at 20 Hz
         self.control_timer = self.create_timer(
             0.05,
             self.control_loop,
+            callback_group=self.callback_group,
         )
 
-        # Start the requested motion
-        self.start_motion(
-            target_x=target_x,
-            target_y=target_y,
-            target_theta_deg=target_theta_deg,
+        self.run_pose_service = self.create_service(
+            RunPose,
+            '/run_pose',
+            self.run_pose_callback,
+            callback_group=self.callback_group,
+        )
+
+        self.get_logger().info(
+            'RunPose server ready on /run_pose.'
         )
 
     def pose_callback(self, msg: Pose) -> None:
         """Store the current turtle pose."""
         self.pose = msg
+
+    def run_pose_callback(
+        self,
+        request: RunPose.Request,
+        response: RunPose.Response,
+    ) -> RunPose.Response:
+        """Receive a target pose, execute it and return the result."""
+
+        # Reject a new request while another motion is running
+        if not self.motion_lock.acquire(blocking=False):
+            response.success = False
+            response.message = 'Another motion is already running.'
+
+            self.get_logger().warning(response.message)
+            return response
+
+        try:
+            if self.pose is None:
+                response.success = False
+                response.message = 'Turtle pose is not available.'
+
+                self.get_logger().error(response.message)
+                return response
+
+            self.start_motion(
+                target_x=float(request.target_x),
+                target_y=float(request.target_y),
+                target_theta_deg=float(request.target_theta_deg),
+            )
+
+            motion_completed = self.motion_done_event.wait(
+                timeout=self.motion_timeout
+            )
+
+            if self.shutting_down or not rclpy.ok():
+                response.success = False
+                response.message = 'RunPose server is shutting down.'
+                return response
+
+            if not motion_completed:
+                self.finish_motion(
+                    success=False,
+                    message=(
+                        'Motion timeout after '
+                        f'{self.motion_timeout:.1f} seconds.'
+                    ),
+                )
+
+            response.success = self.motion_success
+            response.message = self.motion_message
+
+            return response
+
+        finally:
+            self.motion_lock.release()
 
     def start_motion(
         self,
@@ -131,11 +183,7 @@ class GoToPose(Node):
         self.target_x = target_x
         self.target_y = target_y
         self.target_theta_deg = target_theta_deg
-
-        # Internal angular calculations use radians
-        self.target_theta = math.radians(
-            self.target_theta_deg
-        )
+        self.target_theta = math.radians(target_theta_deg)
 
         self.state = self.MOVE_TO_POSITION
         self.motion_active = True
@@ -143,8 +191,10 @@ class GoToPose(Node):
         self.motion_success = False
         self.motion_message = ''
 
+        self.motion_done_event.clear()
+
         self.get_logger().info(
-            'GoToPose motion started. '
+            'RunPose motion started. '
             f'Target: x={self.target_x:.2f}, '
             f'y={self.target_y:.2f}, '
             f'theta={self.target_theta_deg:.1f} deg'
@@ -165,22 +215,16 @@ class GoToPose(Node):
         maximum: float,
     ) -> float:
         """Limit a value to the specified interval."""
-        return max(
-            minimum,
-            min(value, maximum),
-        )
+        return max(minimum, min(value, maximum))
 
     def distance_to_target(self) -> float:
         """Calculate the Euclidean distance to the target position."""
         if self.pose is None:
             return 0.0
 
-        error_x = self.target_x - self.pose.x
-        error_y = self.target_y - self.pose.y
-
         return math.hypot(
-            error_x,
-            error_y,
+            self.target_x - self.pose.x,
+            self.target_y - self.pose.y,
         )
 
     def target_heading(self) -> float:
@@ -200,7 +244,6 @@ class GoToPose(Node):
     ) -> None:
         """Publish a velocity command."""
         command = Twist()
-
         command.linear.x = linear_velocity
         command.angular.z = angular_velocity
 
@@ -214,9 +257,10 @@ class GoToPose(Node):
         )
 
     def control_loop(self) -> None:
-        """Execute the closed-loop GoToPose controller."""
+        """Execute the active closed-loop controller."""
         if (
-            not self.motion_active
+            self.shutting_down
+            or not self.motion_active
             or self.motion_finished
             or self.pose is None
         ):
@@ -278,7 +322,6 @@ class GoToPose(Node):
             return
 
         self.stop_turtle()
-        self.control_timer.cancel()
 
         self.motion_success = success
         self.motion_message = message
@@ -286,40 +329,55 @@ class GoToPose(Node):
         self.motion_active = False
         self.state = self.IDLE
 
+        self.motion_done_event.set()
+
         if success:
             self.get_logger().info(message)
         else:
             self.get_logger().error(message)
 
+    def prepare_shutdown(self) -> None:
+        """Release pending callbacks and prepare the node for shutdown."""
+        if self.shutting_down:
+            return
 
+        self.shutting_down = True
+
+        # Publishing is only possible while the ROS 2 context is valid
+        if rclpy.ok():
+            self.stop_turtle()
+
+        self.state = self.IDLE
+        self.motion_active = False
+        self.motion_finished = True
+        self.motion_success = False
+        self.motion_message = 'RunPose server interrupted.'
+
+        # Release a service callback waiting in Event.wait()
+        self.motion_done_event.set()
+
+      
 def main(args=None) -> None:
     rclpy.init(args=args)
 
-    node = GoToPose()
+    node = RunPoseServer()
+    executor = MultiThreadedExecutor(num_threads=3)
+    executor.add_node(node)
 
     try:
-        while rclpy.ok() and not node.motion_finished:
-            rclpy.spin_once(
-                node,
-                timeout_sec=0.1,
-            )
+        executor.spin()
 
     except KeyboardInterrupt:
-        node.get_logger().info(
-            'Motion interrupted by the user.'
-        )
-
-    finally:
-        # Always stop the turtle before closing the node
-        node.stop_turtle()
-
-        # Allow ROS 2 to process the final zero-velocity command
+        # Avoid logging if ROS 2 has already invalidated the context
         if rclpy.ok():
-            rclpy.spin_once(
-                node,
-                timeout_sec=0.1,
+            node.get_logger().info(
+                'RunPose server interrupted by the user.'
             )
 
+    finally:
+        node.prepare_shutdown()
+
+        executor.shutdown(timeout_sec=1.0)
         node.destroy_node()
 
         if rclpy.ok():
@@ -328,4 +386,3 @@ def main(args=None) -> None:
 
 if __name__ == '__main__':
     main()
-

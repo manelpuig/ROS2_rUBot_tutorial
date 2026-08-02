@@ -43,29 +43,29 @@ class RunPoseSequenceClient(Node):
         ) as yaml_file:
             data = yaml.safe_load(yaml_file)
 
-        poses = data.get('poses', [])
+        steps = data.get('steps', [])
 
-        if not poses:
+        if not steps:
             raise ValueError(
-                'The YAML file does not contain any poses.'
+                'The YAML file does not contain any steps.'
             )
 
         required_fields = {
-            'x',
-            'y',
-            'theta_deg',
+            'target_x',
+            'target_y',
+            'target_theta_deg',
         }
 
-        for index, pose in enumerate(poses):
-            missing_fields = required_fields - pose.keys()
+        for index, step in enumerate(steps):
+            missing_fields = required_fields - step.keys()
 
             if missing_fields:
                 raise ValueError(
-                    f'Pose {index + 1} is missing fields: '
+                    f'Step {index + 1} is missing fields: '
                     f'{sorted(missing_fields)}'
                 )
 
-        return poses
+        return steps
 
     def wait_for_server(self) -> bool:
         """Wait until the RunPose service is available."""
@@ -84,14 +84,14 @@ class RunPoseSequenceClient(Node):
 
         return available
 
-    def send_pose(self, pose: dict):
+    def send_step(self, step: dict):
         """Send one target pose to the RunPose server."""
         request = RunPose.Request()
 
-        request.target_x = float(pose['x'])
-        request.target_y = float(pose['y'])
+        request.target_x = float(step['target_x'])
+        request.target_y = float(step['target_y'])
         request.target_theta_deg = float(
-            pose['theta_deg']
+            step['target_theta_deg']
         )
 
         return self.client.call_async(request)
@@ -103,31 +103,31 @@ def main(args=None) -> None:
     node = RunPoseSequenceClient()
 
     try:
-        poses = node.load_sequence()
+        steps = node.load_sequence()
 
         if not node.wait_for_server():
             return
 
-        total_poses = len(poses)
+        total_steps = len(steps)
 
-        for index, pose in enumerate(poses, start=1):
+        for index, step in enumerate(steps, start=1):
             if not rclpy.ok():
                 break
 
-            pose_name = pose.get(
+            step_name = step.get(
                 'name',
-                f'pose_{index}',
+                f'step_{index}',
             )
 
             node.get_logger().info(
-                f'Executing pose {index}/{total_poses}: '
-                f'{pose_name} — '
-                f'x={float(pose["x"]):.2f}, '
-                f'y={float(pose["y"]):.2f}, '
-                f'theta={float(pose["theta_deg"]):.1f} deg'
+                f'Executing step {index}/{total_steps}: '
+                f'{step_name} — '
+                f'x={float(step["target_x"]):.2f}, '
+                f'y={float(step["target_y"]):.2f}, '
+                f'theta={float(step["target_theta_deg"]):.1f} deg'
             )
 
-            future = node.send_pose(pose)
+            future = node.send_step(step)
 
             rclpy.spin_until_future_complete(
                 node,

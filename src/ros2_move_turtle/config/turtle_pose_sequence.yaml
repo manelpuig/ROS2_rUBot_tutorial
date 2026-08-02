@@ -1,20 +1,20 @@
-poses:
+steps:
   - name: lower_left
-    x: 2.0
-    y: 2.0
-    theta_deg: 0.0
+    target_x: 2.0
+    target_y: 2.0
+    target_theta_deg: 0.0
 
   - name: upper_left
-    x: 2.0
-    y: 8.0
-    theta_deg: 90.0
+    target_x: 2.0
+    target_y: 8.0
+    target_theta_deg: 90.0
 
   - name: upper_right
-    x: 8.0
-    y: 8.0
-    theta_deg: 180.0
+    target_x: 8.0
+    target_y: 8.0
+    target_theta_deg: 180.0
 
   - name: lower_right
-    x: 8.0
-    y: 2.0
-    theta_deg: -90.0
+    target_x: 8.0
+    target_y: 2.0
+    target_theta_deg: -90.0
