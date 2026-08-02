@@ -382,13 +382,15 @@ class RunPoseServer(Node):
             self.get_logger().error(message)
 
     def prepare_shutdown(self) -> None:
-        """Stop active motion and unblock pending service callbacks."""
+        """Release pending callbacks and prepare the node for shutdown."""
         if self.shutting_down:
             return
 
         self.shutting_down = True
 
-        self.stop_turtle()
+        # Publishing is only possible while the ROS 2 context is valid
+        if rclpy.ok():
+            self.stop_turtle()
 
         self.state = self.IDLE
         self.motion_active = False
@@ -396,14 +398,10 @@ class RunPoseServer(Node):
         self.motion_success = False
         self.motion_message = 'RunPose server interrupted.'
 
-        # Unblock a service callback waiting for motion completion
+        # Release a service callback waiting in Event.wait()
         self.motion_done_event.set()
 
-        self.get_logger().info(
-            'RunPose server shutdown requested.'
-        )
-        
-
+      
 def main(args=None) -> None:
     rclpy.init(args=args)
 
@@ -415,9 +413,11 @@ def main(args=None) -> None:
         executor.spin()
 
     except KeyboardInterrupt:
-        node.get_logger().info(
-            'RunPose server interrupted by the user.'
-        )
+        # Avoid logging if ROS 2 has already invalidated the context
+        if rclpy.ok():
+            node.get_logger().info(
+                'RunPose server interrupted by the user.'
+            )
 
     finally:
         node.prepare_shutdown()

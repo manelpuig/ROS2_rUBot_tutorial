@@ -24,6 +24,10 @@ setup(
             os.path.join('share', package_name, 'launch'),
             glob('launch/*.launch.py'),
         ),
+        (
+            'share/' + package_name + '/config',
+            glob('config/*.yaml'),
+        ),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -36,6 +40,7 @@ setup(
             'go_to_pose = ros2_move_turtle.go_to_pose:main',
             'run_pose_server = ros2_move_turtle.run_pose_server:main',
             'run_pose_client = ros2_move_turtle.run_pose_client:main',
+            'run_pose_sequence_client = ros2_move_turtle.run_pose_sequence_client:main',
         ],
     },
 )
