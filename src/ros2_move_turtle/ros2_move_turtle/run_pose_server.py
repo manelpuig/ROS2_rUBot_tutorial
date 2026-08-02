@@ -72,6 +72,7 @@ class RunPoseServer(Node):
         self.motion_finished = False
         self.motion_success = False
         self.motion_message = ''
+        self.shutting_down = False
 
         # Used to notify the service callback when motion finishes
         self.motion_done_event = threading.Event()
@@ -149,6 +150,11 @@ class RunPoseServer(Node):
             motion_completed = self.motion_done_event.wait(
                 timeout=self.motion_timeout
             )
+
+            if self.shutting_down or not rclpy.ok():
+                response.success = False
+                response.message = 'RunPose server is shutting down.'
+                return response
 
             if not motion_completed:
                 self.finish_motion(
@@ -253,7 +259,8 @@ class RunPoseServer(Node):
     def control_loop(self) -> None:
         """Execute the active closed-loop controller."""
         if (
-            not self.motion_active
+            self.shutting_down
+            or not self.motion_active
             or self.motion_finished
             or self.pose is None
         ):
@@ -374,12 +381,33 @@ class RunPoseServer(Node):
         else:
             self.get_logger().error(message)
 
+    def prepare_shutdown(self) -> None:
+        """Stop active motion and unblock pending service callbacks."""
+        if self.shutting_down:
+            return
+
+        self.shutting_down = True
+
+        self.stop_turtle()
+
+        self.state = self.IDLE
+        self.motion_active = False
+        self.motion_finished = True
+        self.motion_success = False
+        self.motion_message = 'RunPose server interrupted.'
+
+        # Unblock a service callback waiting for motion completion
+        self.motion_done_event.set()
+
+        self.get_logger().info(
+            'RunPose server shutdown requested.'
+        )
+        
 
 def main(args=None) -> None:
     rclpy.init(args=args)
 
     node = RunPoseServer()
-
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
 
@@ -392,12 +420,9 @@ def main(args=None) -> None:
         )
 
     finally:
-        node.stop_turtle()
+        node.prepare_shutdown()
 
-        # Allow the stop command to be processed
-        time.sleep(0.1)
-
-        executor.shutdown()
+        executor.shutdown(timeout_sec=1.0)
         node.destroy_node()
 
         if rclpy.ok():
