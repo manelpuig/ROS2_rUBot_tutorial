@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<robot name="target_pose">
+  <material name="target_orange">
+    <color rgba="1.0 0.45 0.05 1.0"/>
+  </material>
+
+  <!--
+    A single asymmetric visual link is enough for this exercise. The origin of
+    target_b is located at one end of the box, so roll, pitch and yaw changes
+    are easy to identify in RViz2.
+  -->
+  <link name="target_b">
+    <visual>
+      <origin xyz="0.10 0.0 0.0" rpy="0.0 0.0 0.0"/>
+      <geometry>
+        <box size="0.20 0.08 0.04"/>
+      </geometry>
+      <material name="target_orange"/>
+    </visual>
+  </link>
+</robot>
