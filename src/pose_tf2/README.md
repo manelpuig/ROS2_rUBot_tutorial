@@ -11,8 +11,10 @@ The exercise statement, theory and expected results are in
 From the ROS 2 workspace root:
 
 ```bash
-rosdep install --from-paths src --ignore-src -r -y
-python3 -m pip install "spatialmath-python[ros-humble]"
+python3 -m pip install --user \
+  "numpy>=1.22,<1.25" \
+  "setuptools>=30.3,<80" \
+  "spatialmath-python[ros-humble]"
 ```
 
 SpatialMath is required only by the `exercise4_rpy_spatialmath` executable.
