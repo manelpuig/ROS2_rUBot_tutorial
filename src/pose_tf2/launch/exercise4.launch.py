@@ -24,8 +24,8 @@ def generate_launch_description() -> LaunchDescription:
             'exercise_node',
             default_value='exercise4_rpy',
             description=(
-                'Executable to run: exercise4_rpy or '
-                'exercise4_rpy_template'
+                'Executable to run: exercise4_rpy, '
+                'exercise4_rpy_spatialmath or exercise4_rpy_template'
             ),
         ),
         DeclareLaunchArgument('x', default_value='0.350'),

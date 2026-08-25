@@ -1,89 +1,54 @@
-# pose_tf2 — Exercise 4
+# pose_tf2
 
-This ROS 2 Humble package represents the Exercise 4 `Target B` pose with TF2
-and displays an asymmetric target object in RViz2.
+ROS 2 Humble package for Exercise 4: publish the transform
+`ur5e_base -> target_b` with TF2 and display it in RViz2.
 
-The transform is:
+The exercise statement, theory and expected results are in
+[ROS 2 TF2 - POSE Exercise 4](../../Documentation/04_ROS2_TF2_POSE_Exercise4.md).
 
-```text
-ur5e_base
-    └── target_b
+## Install dependencies
+
+From the ROS 2 workspace root:
+
+```bash
+rosdep install --from-paths src --ignore-src -r -y
+python3 -m pip install "spatialmath-python[ros-humble]"
 ```
 
-The default target pose is:
+SpatialMath is required only by the `exercise4_rpy_spatialmath` executable.
 
-```text
-Translation [m] = [0.350, -0.350, 0.170]
-RPY [deg]       = [135.0, 0.0, 60.0]
-```
-
-## Build and run
-
-From the workspace root:
+## Build
 
 ```bash
 colcon build --packages-select pose_tf2 --symlink-install
 source install/setup.bash
+```
+
+## Run
+
+Run the standard solution:
+
+```bash
 ros2 launch pose_tf2 exercise4.launch.py
 ```
 
-The launch file starts:
-
-- the Exercise 4 TF2 broadcaster;
-- `robot_state_publisher` with `urdf/target_pose.urdf`;
-- RViz2 with the Grid, TF and RobotModel displays already configured.
-
-## Verify the result
+Alternative implementations can be selected with `exercise_node`:
 
 ```bash
-ros2 run tf2_ros tf2_echo ur5e_base target_b
-ros2 run tf2_tools view_frames
-```
-
-Expected ROS quaternion order `[x, y, z, w]`:
-
-```text
-[0.800103, 0.461940, 0.191342, 0.331414]
-```
-
-## Change the pose
-
-The launch arguments use metres and degrees:
-
-```bash
+# Short solution using spatialmath.base
 ros2 launch pose_tf2 exercise4.launch.py \
-  x:=0.50 y:=-0.20 z:=0.30 \
-  roll_deg:=90.0 pitch_deg:=30.0 yaw_deg:=45.0
-```
+  exercise_node:=exercise4_rpy_spatialmath
 
-The solution node reads the parameters for every publication, so they can also
-be changed while the node is running:
-
-```bash
-ros2 param set /exercise4_rpy_broadcaster pitch_deg 45.0
-```
-
-## Student template
-
-Launch the template instead of the completed solution:
-
-```bash
+# Student template with TODO sections
 ros2 launch pose_tf2 exercise4.launch.py \
   exercise_node:=exercise4_rpy_template
 ```
 
-Complete the `TODO` sections in
-`pose_tf2/exercise4_rpy_template.py`. The initial template publishes the correct
-translation but uses the identity quaternion until the conversion is completed.
+The launch arguments `x`, `y`, `z`, `roll_deg`, `pitch_deg` and `yaw_deg`
+can be used to change the target pose.
 
-## Orientation convention
+## Verify
 
-The package uses fixed-axis XYZ roll, pitch and yaw:
-
-```text
-R = Rz(yaw) @ Ry(pitch) @ Rx(roll)
+```bash
+ros2 run tf2_ros tf2_echo ur5e_base target_b
 ```
-
-Angles received by the launch file are in degrees. TF2 messages use radians for
-the conversion and store the final orientation as a normalized quaternion in
-ROS order `[x, y, z, w]`.
