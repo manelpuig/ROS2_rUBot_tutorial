@@ -1,175 +1,48 @@
 # ROS 2 Tutorial — Distributed Robot Control with Services
 
-## Objective
+## Learning objectives
 
-In this exercise, you will implement two ROS 2 architectures to move the Turtlesim robot to a target position and final orientation. 
+This is a first guided introduction to distributed robot control in ROS 2. The
+goal is not to program a complete controller from scratch, but to understand
+how its parts communicate.
+
+After this activity, you should be able to:
+
+- identify a ROS 2 node, topic, service and parameter;
+- explain the difference between a service client and a service server;
+- identify the request and response fields of a service;
+- explain why the client specifies **what** the robot must do while the server
+  decides **how** to do it;
+- make a small modification to a server and verify its behaviour.
 
 ![](./Images/02_ROS2_tutorial/02_move_turtle.png)
-> We usually name the node as the python file name
 
-The motion controller will:
-
-- subscribe to /turtle1/pose to obtain the current turtle pose;
-- calculate the distance and orientation errors;
-- publish linear and angular velocity commands to /turtle1/cmd_vel;
-- stop when the target position and final orientation are reached.
-
-The same closed-loop controller will be used in two different software architectures:
-
-- **Direct Node architecture**: In the first implementation, a single node receives the target pose through ROS 2 parameters and executes the complete motion controller.
-- **Client-Server architecture**: The same motion controller will be executed by a persistent **robot server**, while another node will send the target pose using a ROS 2 Service.
-
-The objective of the exercise is to compare both architectures and understand how ROS 2 Services can separate:
-
-* a high-level application running on a client computer;
-* a closed-loop robot controller running close to the robot, its sensors and its actuators.
-
-This distributed architecture will later be reused with the rUBot mobile robot, where the controller may run on the Raspberry Pi, and with the UR5e industrial robot, where the motion server runs on the computer connected to the robot.
+> ROS 2 node names are often similar to the names of their Python files.
 
 ---
 
-## Why do we need a Service?
+# Part 1 — From direct to distributed control
 
-Imagine the following situation:
+## 1. Build the workspace
 
-* A student works from a laptop connected through WiFi.
-* The robot has its own computer, such as a Raspberry Pi or an industrial control PC.
-* The robot must execute a closed-loop controller using sensors and actuators.
+Open a terminal:
 
-In the Direct node architecture would be:
+```bash
+cd ~/ROS2_rUBot_tutorial
 
-```text
-Student PC
-     │
-     │ continuous /cmd_vel messages
-     ▼
-Robot
+colcon build --packages-select \
+  turtle_interfaces \
+  ros2_move_turtle \
+  --symlink-install
+
+source install/setup.bash
 ```
 
-In this case, the complete control loop depends on the network.
+## 2. Run the direct controller
 
-Possible problems include:
-
-* WiFi latency;
-* network jitter;
-* packet losses;
-* variable communication delays;
-* temporary loss of connection.
-
-If every velocity command must travel through the network, the robot may react slowly or unpredictably.
-
-Client-Server architecture is more robust and separates the high-level command from the local robot controller:
-
-```text
-Student PC
-High-level application
-
-        │
-        │ RunPose service request
-        ▼
-
-Robot controller
-Service server
-
-        │
-        ├── Sensor subscribers
-        ├── Closed-loop controller
-        └── Actuator publisher
-
-        ▼
-
-Robot
-```
-
-The client only specifies **what the robot must do**:
-
-> Go to this pose.
-
-The server decides **how the robot executes the motion**.
-
-The complete closed-loop controller runs close to the robot, where communication with sensors and actuators is fast and reliable.
-
----
-
-## Examples used later in this course
-
-### rUBot mobile robot
-
-```text
-Student PC
-High-level application
-
-        │
-        │ Motion request
-        ▼
-
-Raspberry Pi
-Robot computer
-
-        │
-        ├── Wheel encoders
-        ├── IMU and odometry
-        ├── Local controller
-        └── Motor commands
-
-        ▼
-
-rUBot
-```
-
-The student computer sends high-level commands.
-
-The Raspberry Pi executes the low-level robot control locally.
-
-Some computationally demanding processes, such as SLAM or Navigation2, may still run on the student PC because the Raspberry Pi has limited computational resources.
-
----
-
-### UR5e industrial robot
-
-```text
-Student PC
-High-level application
-
-        │
-        │ RunPose service request
-        ▼
-
-Professor PC
-Robot server
-
-        │
-        ├── MoveIt 2
-        ├── Motion planning
-        ├── Trajectory execution
-        └── UR5e communication
-
-        ▼
-
-UR5e
-```
-
-The student computer sends a motion request.
-
-Motion planning and trajectory execution run on the professor PC, which is connected to the UR5e through Ethernet.
-
-This avoids executing critical robot communication through the student WiFi connection.
-
----
-
-# Exercise overview
-
-The exercise is divided into two parts.
-
-## Part 1 — Direct GoToPose node
-
-The first implementation uses a single node:
-
-```text
-go_to_pose.py
-```
-
-The target pose is provided through ROS 2 parameters.
+Before introducing a service, consider the most direct solution. The package
+contains `go_to_pose.py`, a node that receives a target through parameters and
+executes the complete closed-loop controller:
 
 ```text
 Target parameters
@@ -184,7 +57,7 @@ go_to_pose
 turtlesim
 ```
 
-Example:
+It can be run with:
 
 ```bash
 ros2 launch ros2_move_turtle go_to_pose.launch.py \
@@ -193,65 +66,121 @@ ros2 launch ros2_move_turtle go_to_pose.launch.py \
   target_theta_deg:=-90.0
 ```
 
-This node executes one motion and finishes when the target pose is reached.
+Observe how this single controller node receives the target and moves the
+turtle. When the target has been reached, stop the launch with `Ctrl+C` before
+continuing with Part 2.
+
+This architecture is simple and works well when the program and the robot are
+on the same computer. However, consider a real robot controlled from a student
+laptop through Wi-Fi:
+
+```text
+Student laptop
+Closed-loop controller
+      │
+      │  continuous velocity commands over Wi-Fi
+      ▼
+Robot
+```
+
+The controller needs a continuous cycle:
+
+```text
+Read sensors → calculate error → send command → read sensors again
+```
+
+If this complete loop crosses the network, every controller iteration can be
+affected by:
+
+- Wi-Fi latency;
+- network jitter;
+- packet loss;
+- variable communication delays;
+- a temporary loss of connection.
+
+For a real robot, the closed-loop controller should normally run close to its
+sensors and actuators. The student computer should only send a high-level
+request:
+
+```text
+Student laptop
+Service client
+      │
+      │  one high-level request: Go to this pose
+      ▼
+Robot computer
+Service server and local closed-loop controller
+      │
+      ├── reads sensors locally
+      └── commands actuators locally
+      ▼
+Robot
+```
+
+This is why the second architecture implements the `/run_pose` service. The
+client specifies **what the robot must do**, and the server decides **how the
+robot executes it**.
+
+The two architectures can be compared as follows:
+
+| Direct node | Client-server architecture |
+|---|---|
+| Target comes directly from parameters | Target is sent in a service request |
+| High-level command and controller are in one node | Client and controller are separate nodes |
+| Node finishes after one movement | Server remains available |
+| Suitable for local execution | Client and server can run on different computers |
+
+The closed-loop controller can be the same in both cases. What changes is the
+software architecture and the source of the target pose.
 
 ---
 
-## Part 2 — Distributed RunPose service
+# Part 2 — Guided demonstration
 
-The motion controller is transformed into a persistent service server.
+Now run the distributed system and observe its behaviour. The client and
+server code will be examined afterwards.
 
-Two nodes are used:
+## 1. Start Turtlesim and the server
 
-```text
-run_pose_server.py
-run_pose_client.py
+Terminal 1:
+
+```bash
+source ~/ROS2_rUBot_tutorial/install/setup.bash
+
+ros2 launch ros2_move_turtle run_pose_server.launch.py
 ```
 
-The client sends the target pose.
+This launch file starts:
 
-The server executes the same closed-loop motion controller used in `go_to_pose.py`.
+- the Turtlesim simulator;
+- the persistent `run_pose_server` node.
 
-```text
-run_pose_client
-        │
-        │ RunPose request
-        ▼
-run_pose_server
-        │
-        ├── subscribes to /turtle1/pose
-        ├── executes the closed-loop controller
-        └── publishes to /turtle1/cmd_vel
-        ▼
-turtlesim
+Leave this terminal running.
+
+## 2. Inspect the ROS 2 system
+
+Open Terminal 2 and source the workspace:
+
+```bash
+source ~/ROS2_rUBot_tutorial/install/setup.bash
 ```
 
-The server remains active after completing the motion and can receive additional requests.
+List the active nodes, topics and services:
 
----
-
-# Packages
-
-The workspace contains two packages:
-
-```text
-src/
-├── turtle_interfaces
-└── ros2_move_turtle
+```bash
+ros2 node list
+ros2 topic list
+ros2 service list
 ```
 
----
+Find the type used by `/run_pose` and inspect its interface:
 
-## `turtle_interfaces`
-
-This package contains the custom service definition.
-Students do not need to modify this package.
-
-The service is defined in:
-
-```text
-turtle_interfaces/srv/RunPose.srv
+```bash
+ros2 service type /run_pose
+ros2 interface show turtle_interfaces/srv/RunPose
 ```
+
+The interface is:
 
 ```text
 float32 target_x
@@ -262,430 +191,527 @@ bool success
 string message
 ```
 
-The request contains:
+The fields above `---` form the request. The fields below it form the
+response.
 
-* target position `x`;
-* target position `y`;
-* final target orientation in degrees.
+## 3. Send the first request
 
-The response contains:
-
-* whether the motion completed successfully;
-* a message describing the result.
-
-The interface can be inspected with:
+The service can be called directly from the terminal:
 
 ```bash
-ros2 interface show turtle_interfaces/srv/RunPose
+ros2 service call \
+  /run_pose \
+  turtle_interfaces/srv/RunPose \
+  "{target_x: 2.0, target_y: 8.0, target_theta_deg: -90.0}"
 ```
+
+Before pressing Enter, predict:
+
+- where the turtle will move;
+- what its final orientation will be;
+- what the service response will contain.
+
+The command waits while the server moves the turtle. When the target is
+reached, the server returns a response similar to:
+
+```text
+success: true
+message: "Target pose reached successfully."
+```
+
+## 4. Send a second request with the Python client
+
+Without restarting Terminal 1, run:
+
+```bash
+ros2 launch ros2_move_turtle run_pose_client.launch.py \
+  target_x:=8.0 \
+  target_y:=3.0 \
+  target_theta_deg:=90.0
+```
+
+Observe that:
+
+- the client sends one request and finishes after receiving the response;
+- the server executes the movement;
+- the server remains active and can accept another request.
+
+At this point, the important observation is:
+
+```text
+The client finishes.
+The server remains active.
+```
+
 ---
 
-## `ros2_move_turtle`
+# Part 3 — Understanding the architecture
 
-Students work inside the Python package:
-
-```text
-ros2_move_turtle
-```
-
-The final package contains:
+The complete system can be represented as:
 
 ```text
-ros2_move_turtle/
-├── launch/
-│   ├── go_to_pose.launch.py
-│   ├── run_pose_server.launch.py
-│   └── run_pose_client.launch.py
-├── ros2_move_turtle/
-│   ├── go_to_pose.py
-│   ├── run_pose_server.py
-│   └── run_pose_client.py
-├── package.xml
-├── setup.cfg
-└── setup.py
+run_pose_client
+        │
+        │  RunPose request and response
+        ▼
+run_pose_server
+        │
+        ├── subscribes to /turtle1/pose
+        ├── executes the closed-loop controller
+        └── publishes to /turtle1/cmd_vel
+        │
+        ▼
+turtlesim
 ```
+
+The three nodes have different responsibilities:
+
+| Node | Responsibility |
+|---|---|
+| `run_pose_client` | Specifies the target pose |
+| `run_pose_server` | Receives the request and executes the controller |
+| `turtlesim` | Simulates the robot and its motion |
+
+## Topics, services and parameters
+
+| ROS 2 concept | Example | Purpose |
+|---|---|---|
+| Topic | `/turtle1/pose` | Continuous pose information |
+| Topic | `/turtle1/cmd_vel` | Continuous velocity commands |
+| Service | `/run_pose` | One high-level movement request and its result |
+| Parameters | `target_x`, `target_y`, `target_theta_deg` | Configure the client request |
+
+A useful rule is:
+
+```text
+Topics continuously exchange robot data.
+Services request a specific operation and return a result.
+```
+
+# Part 4 — How the client is constructed
+
+The client is implemented in:
+
+```text
+src/ros2_move_turtle/ros2_move_turtle/run_pose_client.py
+```
+
+It is useful to study the client before the server because it has only one
+responsibility: send one target pose and wait for the result.
+
+## 1. Read the target parameters
+
+The target is configured using ROS 2 parameters:
+
+```python
+self.declare_parameter('target_x', 8.0)
+self.declare_parameter('target_y', 3.0)
+self.declare_parameter('target_theta_deg', 90.0)
+```
+
+The launch arguments used in Part 1 change these values without editing the
+Python program.
+
+## 2. Create the service client
+
+```python
+self.client = self.create_client(
+    RunPose,
+    '/run_pose',
+)
+```
+
+The client must use the same service type and service name as the server.
+
+## 3. Create the request
+
+```python
+request = RunPose.Request()
+request.target_x = self.target_x
+request.target_y = self.target_y
+request.target_theta_deg = self.target_theta_deg
+```
+
+These three fields correspond to the request section of `RunPose.srv`.
+
+## 4. Send the request
+
+```python
+future = self.client.call_async(request)
+```
+
+The result is represented by a `future` because the robot has not completed
+the movement when the request is sent. The client waits until the server
+returns the response and then reads:
+
+```python
+response.success
+response.message
+```
+
+The client does not subscribe to `/turtle1/pose` and does not publish velocity
+commands. Those are server responsibilities.
 
 ---
 
-# Node 1 — `go_to_pose.py`
+# Part 5 — How the server is constructed
 
-## Purpose
-
-`go_to_pose.py` is the first implementation of the closed-loop motion controller.
-
-It receives the target pose through ROS 2 parameters.
-
-It executes one motion and then finishes.
-
-## Inputs
-
-ROS 2 parameters:
+The server is implemented in:
 
 ```text
-target_x
-target_y
-target_theta_deg
+src/ros2_move_turtle/ros2_move_turtle/run_pose_server.py
 ```
 
-Controller parameters:
+It contains the robot-side controller and remains active after each request.
 
-```text
-linear_gain
-angular_gain
-max_linear_speed
-max_angular_speed
-position_tolerance
-angle_tolerance_deg
+## 1. ROS 2 communication
+
+The server creates a publisher for velocity commands:
+
+```python
+self.cmd_vel_publisher = self.create_publisher(
+    Twist,
+    '/turtle1/cmd_vel',
+    10,
+)
 ```
 
-## ROS 2 communication
+It subscribes to the current turtle pose:
 
-Subscriber:
-
-```text
-/turtle1/pose
+```python
+self.pose_subscriber = self.create_subscription(
+    Pose,
+    '/turtle1/pose',
+    self.pose_callback,
+    10,
+    callback_group=self.callback_group,
+)
 ```
 
-Message type:
+It also creates the service:
 
-```text
-turtlesim/msg/Pose
+```python
+self.run_pose_service = self.create_service(
+    RunPose,
+    '/run_pose',
+    self.run_pose_callback,
+    callback_group=self.callback_group,
+)
 ```
 
-Publisher:
+## 2. Receive a request
 
-```text
-/turtle1/cmd_vel
+When the client sends a request, ROS 2 executes:
+
+```python
+run_pose_callback(request, response)
 ```
 
-Message type:
+The callback reads:
 
-```text
-geometry_msgs/msg/Twist
+```python
+request.target_x
+request.target_y
+request.target_theta_deg
 ```
 
-## Controller structure
+and passes them to `start_motion()`.
 
-The controller uses two motion states:
+## 3. Execute the controller
+
+The controller first moves towards the target position and then reaches the
+requested final orientation:
 
 ```text
 MOVE_TO_POSITION
         │
+        │  position reached
         ▼
 ROTATE_TO_FINAL_ORIENTATION
         │
+        │  final orientation reached
         ▼
 IDLE
 ```
 
-### Move to position
+While moving, the server continuously:
 
-The node calculates:
+1. receives the current pose from `/turtle1/pose`;
+2. calculates the distance and angle errors;
+3. publishes velocity commands to `/turtle1/cmd_vel`;
+4. checks whether the target has been reached.
 
-```text
-distance error
-heading error
+## 4. Return the response
+
+When the movement finishes, the server assigns:
+
+```python
+response.success
+response.message
 ```
 
-The linear velocity is proportional to the distance error.
+The response is returned to the client, but the server returns to `IDLE` and
+waits for another request.
 
-The angular velocity is proportional to the heading error.
+## Why does the server use a multithreaded executor?
 
-The turtle moves and turns simultaneously towards the target position.
+The service callback waits for the movement to finish. During that time, the
+server must still receive pose messages and execute the controller timer.
 
-### Rotate to final orientation
-
-When the target position is reached, linear velocity becomes zero.
-
-The turtle rotates until it reaches the requested final orientation.
-
-## Lifecycle
-
-```text
-Read target parameters
-        │
-        ▼
-Start motion
-        │
-        ▼
-Execute closed-loop controller
-        │
-        ▼
-Reach target pose
-        │
-        ▼
-Stop the turtle
-        │
-        ▼
-Finish the node
-```
-
----
-
-# Node 2 — `run_pose_server.py`
-
-## Purpose
-
-`run_pose_server.py` contains the robot-side controller.
-
-It provides the service:
-
-```text
-/run_pose
-```
-
-The server receives target poses from clients and executes the complete closed-loop motion locally.
-
-Unlike `go_to_pose.py`, the server does not finish after completing one motion.
-
-It returns to the idle state and waits for another request.
-
-## ROS 2 communication
-
-Service server:
-
-```text
-/run_pose
-```
-
-Service type:
-
-```text
-turtle_interfaces/srv/RunPose
-```
-
-Subscriber:
-
-```text
-/turtle1/pose
-```
-
-Publisher:
-
-```text
-/turtle1/cmd_vel
-```
-
-## Service execution
-
-When a request is received, the server:
-
-1. Reads the requested target pose.
-2. Converts the target angle from degrees to radians.
-3. Initializes the motion state.
-4. Executes the closed-loop controller.
-5. Stops the turtle when the pose is reached.
-6. Returns the service response.
-7. Waits for the next request.
-
-```text
-Wait for request
-        │
-        ▼
-Start motion
-        │
-        ▼
-Execute controller
-        │
-        ▼
-Finish motion
-        │
-        ▼
-Return response
-        │
-        ▼
-Wait for next request
-```
-
-## Reused controller functions
-
-The server reuses almost the same functions as `go_to_pose.py`:
-
-```text
-start_motion()
-normalize_angle()
-distance_to_target()
-target_heading()
-control_loop()
-move_to_position()
-rotate_to_final_orientation()
-publish_velocity()
-stop_turtle()
-finish_motion()
-```
-
-The main difference is the source of the target pose.
-
-In `go_to_pose.py`:
-
-```text
-ROS 2 parameters
-        │
-        ▼
-start_motion()
-```
-
-In `run_pose_server.py`:
-
-```text
-RunPose request
-        │
-        ▼
-start_motion()
-```
-
-## Multithreaded execution
-
-The service callback waits until the motion is completed.
-
-During this time, ROS 2 must continue processing:
-
-* turtle pose messages;
-* the controller timer;
-* velocity publications.
-
-For this reason, the server uses:
+For this reason, the provided implementation uses:
 
 ```text
 MultiThreadedExecutor
 ReentrantCallbackGroup
 ```
 
-This allows the service callback, subscriber callback and timer callback to run concurrently.
+For this first activity, it is enough to understand their purpose: they allow
+the service, subscriber and timer callbacks to continue working while a motion
+request is active.
 
 ---
 
-# Node 3 — `run_pose_client.py`
+# Part 6 — Student activities
 
-## Purpose
+Work in pairs. Record short answers; one or two sentences are enough unless a
+code modification is requested.
 
-`run_pose_client.py` represents the high-level application.
+## Activity A — Predict and observe
 
-It does not calculate velocity commands.
-
-It only specifies the requested target pose and sends it to the server.
-
-## Inputs
-
-ROS 2 parameters:
-
-```text
-target_x
-target_y
-target_theta_deg
-```
-
-## Client operation
-
-The client:
-
-1. Creates a client for `/run_pose`.
-2. Waits until the service is available.
-3. Creates a `RunPose` request.
-4. Sends the target pose.
-5. Waits for the response.
-6. Prints the result.
-7. Finishes.
-
-```text
-Read target parameters
-        │
-        ▼
-Wait for /run_pose
-        │
-        ▼
-Send request
-        │
-        ▼
-Wait for response
-        │
-        ▼
-Print result
-        │
-        ▼
-Finish client
-```
-
-The client does not subscribe to the turtle pose and does not publish velocity commands.
-
-This is an important architectural separation:
-
-```text
-Client
-specifies what the robot must do
-
-Server
-decides how the robot executes it
-```
-
----
-
-# Complete ROS 2 architecture
-
-```text
-                    RunPose request
-                    RunPose response
-run_pose_client  ─────────────────────►  run_pose_server
-                                              │
-                                              │ subscribes
-                                              ▼
-                                       /turtle1/pose
-                                              ▲
-                                              │
-                                           turtlesim
-                                              ▲
-                                              │
-                                              │ publishes
-                                              │
-                                      /turtle1/cmd_vel
-```
-
-A simplified representation is:
-
-```text
-run_pose_client
-        │
-        │ high-level target pose
-        ▼
-run_pose_server
-        │
-        │ closed-loop velocity control
-        ▼
-turtlesim
-```
-
----
-
-# Running the direct GoToPose node
-
-Compile and source the workspace:
+With the server running, send these two targets one after another:
 
 ```bash
-cd ~/ROS2_rUBot_tutorial
-
-colcon build --packages-select \
-  turtle_interfaces \
-  ros2_move_turtle
-
-source install/setup.bash
-```
-
-Run:
-
-```bash
-ros2 launch ros2_move_turtle go_to_pose.launch.py \
+ros2 launch ros2_move_turtle run_pose_client.launch.py \
   target_x:=2.0 \
   target_y:=8.0 \
   target_theta_deg:=-90.0
 ```
 
-The launch finishes automatically when the target pose is reached.
+```bash
+ros2 launch ros2_move_turtle run_pose_client.launch.py \
+  target_x:=8.0 \
+  target_y:=3.0 \
+  target_theta_deg:=90.0
+```
+
+Before each request, write down:
+
+1. the expected final position;
+2. the expected final orientation;
+3. which node you expect to finish;
+4. which node you expect to remain active.
+
+After each request, compare the prediction with the observed result.
+
+## Activity B — Change a controller parameter
+
+Open:
+
+```text
+src/ros2_move_turtle/launch/run_pose_server.launch.py
+```
+
+Locate:
+
+```python
+'max_linear_speed': 1.5,
+```
+
+Perform the following experiment:
+
+1. Run a target motion with the original value `1.5` and observe its speed.
+2. Stop the launch with `Ctrl+C`.
+3. Change the value to `0.5`.
+4. Start the server launch again. Turtlesim will return to its initial state.
+5. Send the same target and compare the movement.
+6. Restore the original value `1.5` when the experiment is finished.
+
+Answer:
+
+1. Did the target position change?
+2. Did the movement time change?
+3. Was it necessary to modify the client?
+4. Does this parameter describe **what** to do or **how** to do it?
+
+## Activity C — Validate service requests
+
+A robot server should not blindly execute every request. Modify
+`run_pose_server.py` so that it only accepts targets inside this working area:
+
+```text
+1.0 <= target_x <= 10.0
+1.0 <= target_y <= 10.0
+```
+
+Add the validation inside `run_pose_callback()`, before `start_motion()` is
+called.
+
+If the target is outside the working area, the server must:
+
+- not start the movement;
+- set `response.success` to `False`;
+- set `response.message` to `Target outside the workspace`;
+- return the response immediately;
+- remain available for a new valid request.
+
+The required logic is:
+
+```text
+Receive request
+      │
+      ▼
+Is x and y inside the working area?
+      │
+      ├── no  ──► return a failure response
+      │
+      └── yes ──► start the movement
+```
+
+Test the modification with one valid request:
+
+```bash
+ros2 service call \
+  /run_pose \
+  turtle_interfaces/srv/RunPose \
+  "{target_x: 8.0, target_y: 3.0, target_theta_deg: 90.0}"
+```
+
+Expected result:
+
+```text
+success: true
+```
+
+Then test one invalid request:
+
+```bash
+ros2 service call \
+  /run_pose \
+  turtle_interfaces/srv/RunPose \
+  "{target_x: 20.0, target_y: 3.0, target_theta_deg: 90.0}"
+```
+
+Expected result:
+
+```text
+success: false
+message: "Target outside the workspace"
+```
+
+Verify that the turtle does not move after the invalid request and that a new
+valid request is still accepted.
 
 ---
 
-# Running the service architecture
+# Part 7 — Short conceptual questions
 
-## Terminal 1 — Start the server
+Answer each question in one or two sentences.
+
+1. What is the difference between a topic and a service?
+2. What information does the client send to the server?
+3. What information does the server return to the client?
+4. Which node publishes to `/turtle1/cmd_vel`?
+5. Which node subscribes to `/turtle1/pose`?
+6. Why does the server remain active after completing a movement?
+7. Why does the client not need to subscribe to `/turtle1/pose`?
+8. If `max_linear_speed` is changed, are we changing what the robot must do or
+   how it does it?
+9. Why is it useful to validate a request in the server?
+10. Why should a closed-loop controller normally run close to the robot's
+    sensors and actuators?
+
+---
+
+# Service limitations
+
+`RunPose` is useful for introducing distributed robot control. However, a
+movement may take several seconds.
+
+A ROS 2 Action would be more appropriate if the application required:
+
+- continuous progress feedback;
+- goal cancellation;
+- explicit goal states;
+- progress information during execution.
+
+The service is used here because its request-response model makes the first
+distributed architecture easier to understand.
+
+---
+
+# Connection with the real robots
+
+The same separation will be used later with the rUBot and UR5e robots.
+
+For the rUBot, a student laptop can send a high-level command while the
+Raspberry Pi executes the local controller using odometry and motor commands.
+
+For the UR5e, a student application can send a motion request while the robot
+computer executes motion planning, trajectory execution and communication
+with the industrial robot.
+
+In all cases, the central idea is the same:
+
+```text
+Client: what the robot must do
+Server: how the robot executes it
+```
+
+---
+
+# Optional extension — Executing a pose sequence
+
+> This extension does not form part of the student activity. It is included
+> only to show how the same service can be used by a higher-level application.
+
+The client used in the activity sends one target pose and then finishes. A
+different client can reuse the same `/run_pose` service to execute several
+motions in order.
+
+The sequence is defined in:
+
+```text
+src/ros2_move_turtle/config/turtle_pose_sequence.yaml
+```
+
+Each step contains a descriptive name and one target pose:
+
+```yaml
+steps:
+  - name: lower_left
+    target_x: 2.0
+    target_y: 2.0
+    target_theta_deg: 0.0
+
+  - name: upper_left
+    target_x: 2.0
+    target_y: 8.0
+    target_theta_deg: 90.0
+```
+
+The sequence client follows this process:
+
+```text
+Load the YAML file
+        │
+        ▼
+Send one RunPose request
+        │
+        ▼
+Wait for the server response
+        │
+        ├── failure ──► stop the sequence
+        │
+        └── success ─► send the next step
+```
+
+It does not publish velocity commands or execute the controller. It only
+coordinates several high-level requests. The same `run_pose_server` used in
+the main activity executes every movement.
+
+## Running the sequence
+
+First, keep the server running in Terminal 1:
 
 ```bash
 source ~/ROS2_rUBot_tutorial/install/setup.bash
@@ -693,178 +719,28 @@ source ~/ROS2_rUBot_tutorial/install/setup.bash
 ros2 launch ros2_move_turtle run_pose_server.launch.py
 ```
 
-This starts:
-
-* `turtlesim_node`;
-* `run_pose_server`.
-
-The server remains active.
-
----
-
-## Terminal 2 — Send a request
+Then run the sequence client in Terminal 2:
 
 ```bash
 source ~/ROS2_rUBot_tutorial/install/setup.bash
 
-ros2 launch ros2_move_turtle run_pose_client.launch.py \
-  target_x:=2.0 \
-  target_y:=8.0 \
-  target_theta_deg:=-90.0
+ros2 launch ros2_move_turtle \
+  run_pose_sequence_client.launch.py
 ```
 
-The client finishes after receiving the response.
+The client loads the default YAML file, sends the first pose and waits until
+the server reports success. It then continues with the following pose. The
+sequence finishes when all the steps have completed successfully.
 
-The server remains available.
-
-A second request can then be sent:
+A different YAML file can be selected with the `sequence_file` launch
+argument:
 
 ```bash
-ros2 launch ros2_move_turtle run_pose_client.launch.py \
-  target_x:=8.0 \
-  target_y:=8.0 \
-  target_theta_deg:=180.0
+ros2 launch ros2_move_turtle \
+  run_pose_sequence_client.launch.py \
+  sequence_file:=/absolute/path/to/my_sequence.yaml
 ```
 
----
-
-# Calling the service from the command line
-
-The server can also be tested without the Python client:
-
-```bash
-ros2 service call \
-  /run_pose \
-  turtle_interfaces/srv/RunPose \
-  "{
-    target_x: 8.0,
-    target_y: 3.0,
-    target_theta_deg: 90.0
-  }"
-```
-
-Expected response:
-
-```text
-success: true
-message: "Target pose reached successfully..."
-```
-
----
-
-# Comparing the two implementations
-
-## Direct node
-
-```text
-Target parameters
-        │
-        ▼
-go_to_pose
-        │
-        ├── closed-loop controller
-        └── velocity commands
-        ▼
-turtlesim
-```
-
-Characteristics:
-
-* one node;
-* one target pose;
-* one motion;
-* the node finishes after execution.
-
----
-
-## Client-server architecture
-
-```text
-Target parameters
-        │
-        ▼
-run_pose_client
-        │
-        │ RunPose request
-        ▼
-run_pose_server
-        │
-        ├── closed-loop controller
-        └── velocity commands
-        ▼
-turtlesim
-```
-
-Characteristics:
-
-* separate high-level client and robot server;
-* target transmitted through a service;
-* controller remains close to the robot;
-* server accepts multiple requests;
-* client finishes after receiving the result.
-
----
-
-# Topics and Services
-
-Topics are used for continuous information:
-
-```text
-/turtle1/pose
-/turtle1/cmd_vel
-```
-
-The service is used for a high-level request:
-
-```text
-/run_pose
-```
-
-A useful rule is:
-
-```text
-Topics continuously exchange robot data.
-
-Services request a specific operation.
-```
-
-In this exercise:
-
-```text
-Pose sensor data        → Topic
-Velocity commands       → Topic
-Go to a target pose     → Service
-```
-
----
-
-# Service limitations
-
-The `RunPose` service is useful for introducing distributed robot control.
-
-However, the movement may take several seconds.
-
-A ROS 2 Action would be more appropriate if the application required:
-
-* continuous execution feedback;
-* goal cancellation;
-* explicit goal states;
-* progress information.
-
-The service architecture is used here because it is simple and directly related to the later UR5e laboratory architecture.
-
----
-
-# Learning objectives
-
-After completing this exercise, students should understand:
-
-* how a closed-loop robot controller uses publishers and subscribers;
-* how a target pose can be provided through parameters or through a service;
-* the difference between a service client and a service server;
-* why robot controllers should often execute close to the robot;
-* why continuous low-level commands should not depend on a WiFi connection;
-* how the same controller can be reused in different ROS 2 architectures;
-* why the client specifies the task while the server executes the controller;
-* how the architecture relates to the later rUBot and UR5e laboratory sessions.
- in the **rUBot** and **UR5e** laboratory sessions.
+This illustrates an important benefit of the service architecture: the robot
+server does not need to change when a new high-level client or behaviour is
+created.
