@@ -1,4 +1,4 @@
-# ROS 2 TF2 — POSE Exercise 4
+# ROS 2 TF2 — POSE Exercises
 
 ## Objective
 

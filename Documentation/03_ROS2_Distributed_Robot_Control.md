@@ -66,6 +66,8 @@ ros2 launch ros2_move_turtle go_to_pose.launch.py \
   target_theta_deg:=-90.0
 ```
 
+![](./Images/03_Control/1_go2pose.png)
+
 Observe how this single controller node receives the target and moves the
 turtle. When the target has been reached, stop the launch with `Ctrl+C` before
 continuing with Part 2.
@@ -150,6 +152,8 @@ source ~/ROS2_rUBot_tutorial/install/setup.bash
 ros2 launch ros2_move_turtle run_pose_server.launch.py
 ```
 
+![](./Images/03_Control/1_go2pose_server.png)
+
 This launch file starts:
 
 - the Turtlesim simulator;
@@ -211,6 +215,8 @@ Before pressing Enter, predict:
 - what its final orientation will be;
 - what the service response will contain.
 
+![](./Images/03_Control/1_go2pose_client.png)
+
 The command waits while the server moves the turtle. When the target is
 reached, the server returns a response similar to:
 
@@ -229,6 +235,8 @@ ros2 launch ros2_move_turtle run_pose_client.launch.py \
   target_y:=3.0 \
   target_theta_deg:=90.0
 ```
+
+![](./Images/03_Control/1_go2pose_client2.png)
 
 Observe that:
 
