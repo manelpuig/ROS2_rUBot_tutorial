@@ -54,15 +54,15 @@ ros2 pkg create --build-type ament_python --license Apache-2.0 ros2_tutorial --d
 
 Now you have to build the created ws:
 ```shell
-cd /home/ROS2_rUBot_tutorial_ws
+cd /home/ROS2_rUBot_tutorial
 colcon build
 ```
 Source the workspace. Be sure in .bashrc file to have:
 ```shell
 source /opt/ros/humble/setup.bash 
 source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
-source /home/ROS2_rUBot_tutorial_ws/install/setup.bash
-cd /home/ROS2_rUBot_tutorial_ws
+source /home/ROS2_rUBot_tutorial/install/setup.bash
+cd /home/ROS2_rUBot_tutorial
 ```
 You are ready to work with this workspace
 
