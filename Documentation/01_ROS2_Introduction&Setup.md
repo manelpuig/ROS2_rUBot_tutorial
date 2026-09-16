@@ -190,7 +190,7 @@ To work properly in a ROS environment, you can:
 
 We have designed a University of Barcelona custom Docker-based ROS 2 Humble environment to simplify student access to ROS 2 and ensure platform-independent workflows in robotics courses.
 
-The installation details are described on: [UB custom ROS2 Humble environment](https://github.com/manelpuig/ROS2_rUBot_tutorial_ws/blob/main/network_config/humble/UB_Custom_Docker_container_humble.md)
+The installation details are described on: [UB custom ROS2 Humble environment](https://github.com/manelpuig/ROS2_rUBot_tutorial/blob/main/network_config/humble/UB_Custom_Docker_container_humble.md)
 ### "The Construct" ROS environment
 
 Is recommended for fast and reliable use:
@@ -216,8 +216,8 @@ To work on the project (during lab sessions or for homework at home), each stude
 - Clone the `Director`'s github project
   ```shell
   cd /home/user
-  git clone https://github.com/director_username/ROS2_rUBot_tutorial_ws
-  cd ROS2_rUBot_tutorial_ws
+  git clone https://github.com/director_username/ROS2_rUBot_tutorial
+  cd ROS2_rUBot_tutorial
   colcon build
   ```
 - If the compilation process returns warnings on "Deprecated setup tools". Install setup tools version 58.2.0 (last version to work with ros2 python packages without any warnings):
@@ -240,10 +240,8 @@ To work on the project (during lab sessions or for homework at home), each stude
     ```xml
     source /opt/ros/humble/setup.bash
     source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
-    source /home/user/ROS2_rUBot_tutorial_ws/install/setup.bash
-    cd /home/user/ROS2_rUBot_tutorial_ws
-    git config --global user.email "xxx@alumnes.ub.edu"
-    git config --global user.name "your_github_username"
+    source /home/user/ROS2_rUBot_tutorial/install/setup.bash
+    cd /home/user/ROS2_rUBot_tutorial
     ```
     > Include the name an email you have used to create your github account
     >
@@ -257,7 +255,7 @@ The objective is to update the changes you have made, when working in a ROS2 env
 
 - Access to your environment local repository:
   ````shell
-  cd /home/user/ROS2_rUBot_tutorial_ws
+  cd /home/user/ROS2_rUBot_tutorial
   ````
 - Update the local repository with possible changes in github origin repository
   ````shell
@@ -279,7 +277,7 @@ To obtain the **PAT** in github follow the instructions:
   - Select Personal Access Tokens: Choose Tokens (classic)
   - Click Generate new token (classic) and configure it:
     - Add a note to describe the purpose of the token, e.g., "ROS repo sync."
-    - Set the expiration (e.g., 30 days, 60 days, or no expiration).
+    - Set the expiration (e.g., 30 days, 60 days, or no expiration). Choose `no expiration`
     - Under Scopes, select the permissions required:
       - For repository sync, you usually need: repo (full control of private repositories)
     - Click Generate token
@@ -477,3 +475,41 @@ rqt # to open the rqt interface and then select the "Plot" plugin
 
 ![](./Images/01_ROS2_setup/11_turtlesim_rqt.png)
 
+
+## **Moving a UR5e: topics, services and actions**
+
+The same UR5e movement can be implemented using different ROS 2 communication styles.
+
+**Topic — send a movement command**
+
+A node publishes the desired joint trajectory to: `/scaled_joint_trajectory_controller/joint_trajectory`
+
+The message contains the target joint angles and the movement duration. The robot controller subscribes to this topic and executes the trajectory.
+
+Topics are suitable for continuously sending commands, but the publisher does not receive a direct response indicating whether the movement succeeded.
+
+
+
+**Service — request a movement**
+
+A service client sends only the desired final pose to a service running on the professor’s PC: `/move_to_pose`
+
+The service server can use MoveIt 2 to plan and execute the movement, and then return a simple response such as:
+````text
+success: true
+message: "Target reached"
+````
+
+This solution is simple, but it is not ideal for a movement that takes several seconds because the client receives no continuous progress feedback.
+
+**Action — execute and monitor a movement**
+
+An action client sends the final pose as a goal to an action server on the professor’s PC. The server uses MoveIt 2 to plan and execute the trajectory.
+
+During execution, the server can provide feedback such as the movement progress or current position. Finally, it returns the result, and the client can also cancel the movement.
+
+Therefore:
+
+- Use a topic for continuous commands without a direct result.
+- Use a service for a simple request and final response.
+- Use an action for a movement that takes time and requires feedback, result reporting or cancellation.
