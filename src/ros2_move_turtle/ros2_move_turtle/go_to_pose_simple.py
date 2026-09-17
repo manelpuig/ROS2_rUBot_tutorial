@@ -76,8 +76,6 @@ def main(args=None):
         node.finished = True
         node.command = Twist()
         node.publish_velocity()
-        if rclpy.ok():
-            rclpy.spin_once(node, timeout_sec=0.1)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
