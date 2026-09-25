@@ -38,6 +38,10 @@ setup(
     entry_points={
         'console_scripts': [
             'go_to_pose = ros2_move_turtle.go_to_pose:main',
+            'go_to_pose_client = ros2_move_turtle.go_to_pose_client:main',
+            'go_to_pose_sequence_client = ros2_move_turtle.go_to_pose_sequence_client:main',
+            'go_to_pose_server = ros2_move_turtle.go_to_pose_server:main',
+            'run_pose = ros2_move_turtle.run_pose:main',
             'run_pose_server = ros2_move_turtle.run_pose_server:main',
             'run_pose_server_validated = ros2_move_turtle.run_pose_server_validated:main',
             'run_pose_client = ros2_move_turtle.run_pose_client:main',
