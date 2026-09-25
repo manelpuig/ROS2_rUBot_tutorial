@@ -54,9 +54,20 @@ Create a closed-loop controller that moves the turtlesim turtle to a target pose
 - a **subscriber** to read the current pose from `/turtle1/pose`;
 - a **publisher** to send velocity commands to `/turtle1/cmd_vel`.
 
-The provided [run_pose.py](../src/ros2_move_turtle/ros2_move_turtle/run_pose.py) works, but it was generated with AI from a general request. When we ask an AI for code without specifying the expected structure and requirements—and without enough ROS 2 knowledge to evaluate its answer—the result may be correct but unnecessarily complex.
+The provided [run_pose.py](../src/ros2_move_turtle/ros2_move_turtle/run_pose.py) works, but it was generated with AI from a general request. Without clear requirements and enough ROS 2 knowledge to evaluate the answer, AI-generated code may be correct but unnecessarily complex.
 
-In this example, the original program is almost 400 lines long. It spreads the controller across many methods, uses a three-state state machine, stores several redundant status variables, adds a manual `spin_once()` loop, and includes extra lifecycle and result-management logic. It does not create explicit threads, but ROS callbacks, a timer, and the manual execution loop make its flow harder for a beginner to follow.
+The original program is not optimal for this introductory activity because:
+
+- it is almost 400 lines long;
+- it divides a simple controller into many small methods;
+- it uses a three-state state machine when two Boolean indicators are sufficient;
+- it stores several redundant status variables;
+- it separates the pose subscriber from the control calculations;
+- it uses a manual loop with `spin_once()` instead of the standard `rclpy.spin(node)` structure;
+- it includes extra lifecycle, result-management, and logging logic;
+- its callbacks, timer, and manual execution loop make the program flow difficult for a beginner to follow.
+
+The program does not create explicit threads; its complexity comes mainly from its length and organization.
 
 Your task is to rewrite it using the simple publisher and subscriber templates introduced in [02_ROS2_Tutorial.md](02_ROS2_Tutorial.md). You may use AI, but your prompt and your review of its answer must enforce the requirements below.
 
@@ -103,6 +114,14 @@ Run turtlesim and check that:
 4. Another target can be selected using ROS parameters.
 5. Pressing Ctrl+C during motion stops the turtle safely.
 
-## Submit
+## Delivery
 
-Submit your simplified Python file and a short explanation of how the subscriber calculates the command, how the timer publishes it, and which unnecessary parts of the original program you removed.
+This is an **individual activity**.
+
+Record a short video showing:
+
+- how you launch your `go_to_pose` program;
+- the turtle moving to the target position and final orientation;
+- the final result after the complete target pose has been reached.
+
+Upload the video to the corresponding assignment in the Virtual Campus.
