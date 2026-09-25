@@ -71,7 +71,7 @@ The program does not create explicit threads; its complexity comes mainly from i
 
 Your task is to rewrite it using the simple publisher and subscriber templates introduced in [02_ROS2_Tutorial.md](02_ROS2_Tutorial.md). You may use AI, but your prompt and your review of its answer must enforce the requirements below.
 
-Keep `run_pose.py` unchanged and write your simplified solution in `go_to_pose.py`. The provided simplified file can be used as a reference after you have attempted your own solution.
+Keep `run_pose.py` unchanged and complete the provided `go_to_pose_template.py` file. When your solution is finished, rename it to `go_to_pose.py` by removing `_template` from the filename. This final name is required by `setup.py` and `go_to_pose.launch.py`.
 
 ## Requirements
 

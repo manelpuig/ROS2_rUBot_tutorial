@@ -157,7 +157,7 @@ The client never reads the turtle pose or publishes velocity. Those are server r
 
 ### Server
 
-The file [go_to_pose_server.py](../src/ros2_move_turtle/ros2_move_turtle/go_to_pose_server.py) combines four ROS elements:
+Start from `go_to_pose_server_template.py` and rename it to `go_to_pose_server.py` when it is complete. The server combines four ROS elements:
 
 | Element | Purpose |
 |---|---|

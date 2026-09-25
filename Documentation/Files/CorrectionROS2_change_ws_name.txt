@@ -1,7 +1,0 @@
-When you change name to workspace we have to verify these environment variables (add them in .bashrc):
-
-export COLCON_PREFIX_PATH=/home/ROS2_rUBot_tutorial_ws/install
-
-export AMENT_PREFIX_PATH=/home/ROS2_rUBot_tutorial_ws/install/robot_description:/home/ROS2_rUBot_tutorial_ws/install/ros2_tutorial:/home/ROS2_rUBot_tutorial_ws/install/robot_bringup:/opt/ros/humble
-
-export CMAKE_PREFIX_PATH=/home/ROS2_rUBot_tutorial_ws/install/robot_bringup:/home/ROS2_rUBot_tutorial_ws/install/robot_description
